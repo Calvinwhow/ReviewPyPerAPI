@@ -21,6 +21,9 @@ RUN pip install --no-cache-dir -r /app/ReviewPyper/requirements.txt \
  && pip install --no-cache-dir fastapi uvicorn[standard]
 
 ENV PYTHONPATH=/app/reviewpyper_api:/app
+ENV DATA_DIR=/data
+
+RUN mkdir -p /data
 
 WORKDIR /app/reviewpyper_api
 

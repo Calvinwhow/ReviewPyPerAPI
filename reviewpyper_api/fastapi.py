@@ -6,6 +6,14 @@ _api_root = Path(__file__).resolve().parent
 if str(_api_root) not in sys.path:
     sys.path.insert(0, str(_api_root))
 
+try:
+    import ReviewPyper  # noqa: F401
+except Exception as exc:
+    raise RuntimeError(
+        "ReviewPyper is not available. This API expects ReviewPyper to be installed "
+        "via the Docker image build (git clone + PYTHONPATH)."
+    ) from exc
+
 from routers.titles import router as titles_router
 from routers.abstracts import router as abstracts_router
 from routers.pdfs import router as pdfs_router

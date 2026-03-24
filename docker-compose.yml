@@ -10,3 +10,5 @@ services:
       dockerfile: reviewpyper_api/containers/Dockerfile.prod
     ports:
       - "8000:8000"
+    volumes:
+      - ./reviewpyper_api/local_data:/data
