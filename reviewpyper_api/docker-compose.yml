@@ -1,0 +1,14 @@
+# docker-compose.yml
+version: "3.9"
+
+services:
+  reviewpyper-api:
+    image: calvinwhow/reviewpyper_api:latest
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.prod
+    ports:
+      - 8000:8000
+    volumes:
+      - ./local_data:/data

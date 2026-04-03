@@ -1,0 +1,11 @@
+Version: "3.9"
+
+services:
+  reviewpyper-cli:
+    image: calvinwhow/reviewpyper_cli:latest
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: ./containers/Dockerfile
+    ports:
+      - 80:80
