@@ -1,0 +1,76 @@
+# Real-data E2E stack: spins up the actual reviewpyper_api alongside the
+# gateway, frontend, and Playwright. Costs real OpenAI tokens — only run
+# manually or in a nightly job.
+#
+# Usage:
+#   export OPENAI_API_KEY=sk-...
+#   docker compose -f docker-compose.real.yml up --build \
+#       --abort-on-container-exit --exit-code-from playwright-real
+#
+# This is intentionally separate from docker-compose.test.yml so the
+# fast/offline test loop is unaffected.
+
+services:
+  reviewpyper-api:
+    image: calvinwhow/reviewpyper_api:latest
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: reviewpyper_api/containers/Dockerfile.prod
+    volumes:
+      - shared-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  gateway-real:
+    build:
+      context: ./reviewpyper_gateway
+      dockerfile: Dockerfile
+    environment:
+      DATA_DIR: /data
+      REVIEWPYPER_API_URL: http://reviewpyper-api:8000
+    volumes:
+      - shared-data:/data
+    depends_on:
+      reviewpyper-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  frontend-real:
+    build:
+      context: ./reviewpyper_frontend
+      dockerfile: Dockerfile.test
+      target: dev
+    environment:
+      VITE_API_PROXY: http://gateway-real:8001
+    # Mount the testMode:false config on top of the in-image testMode:true one.
+    volumes:
+      - ./reviewpyper_frontend/public/config.real.json:/app/public/config.json:ro
+    depends_on:
+      gateway-real:
+        condition: service_healthy
+
+  playwright-real:
+    build:
+      context: ./reviewpyper_frontend
+      dockerfile: Dockerfile.test
+      target: e2e
+    environment:
+      PLAYWRIGHT_BASE_URL: http://frontend-real:5173
+      RUN_REAL_E2E: "1"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY must be set in your shell}
+      CI: "true"
+    depends_on:
+      - frontend-real
+      - gateway-real
+    command: npx playwright test real.spec.ts --reporter=list
+
+volumes:
+  shared-data:

@@ -12,7 +12,7 @@ services:
   # ---- Frontend Vitest unit tests ----
   frontend-unit:
     build:
-      context: ./frontend
+      context: ./reviewpyper_frontend
       dockerfile: Dockerfile.test
       target: test
     command: npm test
@@ -20,14 +20,14 @@ services:
   # ---- Gateway pytest suite ----
   gateway-tests:
     build:
-      context: ./cli/gateway
+      context: ./reviewpyper_gateway
       dockerfile: Dockerfile.test
     command: pytest -q
 
   # ---- E2E stack: gateway + frontend dev server + Playwright ----
   gateway-e2e:
     build:
-      context: ./cli/gateway
+      context: ./reviewpyper_gateway
       dockerfile: Dockerfile
     environment:
       DATA_DIR: /data
@@ -41,7 +41,7 @@ services:
 
   frontend-e2e:
     build:
-      context: ./frontend
+      context: ./reviewpyper_frontend
       dockerfile: Dockerfile.test
       target: dev
     environment:
@@ -53,7 +53,7 @@ services:
 
   e2e:
     build:
-      context: ./frontend
+      context: ./reviewpyper_frontend
       dockerfile: Dockerfile.test
       target: e2e
     environment:

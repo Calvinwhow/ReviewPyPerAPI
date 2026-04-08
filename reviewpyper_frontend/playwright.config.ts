@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { defineConfig } from '@playwright/test';
 
 /**
@@ -14,8 +15,13 @@ import { defineConfig } from '@playwright/test';
 // and frontend are already running as sibling services — skip webServer.
 const externalBase = process.env.PLAYWRIGHT_BASE_URL;
 
+// real.spec.ts hits the actual reviewpyper_api with a real OpenAI key.
+// Only included when RUN_REAL_E2E=1 so the default suite stays free + offline.
+const includeReal = !!process.env.RUN_REAL_E2E;
+
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: includeReal ? [] : ['**/real.spec.ts'],
   fullyParallel: false,
   retries: 0,
   timeout: 60_000,

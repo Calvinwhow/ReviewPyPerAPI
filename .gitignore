@@ -1,1 +1,40 @@
+# macOS
 .DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node / Frontend
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Testing
+test-results/
+playwright-report/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Data
+*.csv
+*.xlsx
+local_data/*
+!local_data/.gitkeep
+
+# LaTeX build artifacts
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+
+# Environment
+.env
+.env.*
