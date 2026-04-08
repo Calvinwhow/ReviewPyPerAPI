@@ -1,0 +1,30 @@
+# Frontend dev / test / e2e image.
+# The existing ./Dockerfile is the prod nginx build; this one is for CI + dev.
+#
+#   docker build -f Dockerfile.test --target dev  -t reviewpyper-frontend:dev  .
+#   docker build -f Dockerfile.test --target test -t reviewpyper-frontend:test .
+#   docker build -f Dockerfile.test --target e2e  -t reviewpyper-frontend:e2e  .
+
+# ---------- base ----------
+FROM node:20-bookworm-slim AS base
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm install --no-audit --no-fund
+COPY . .
+
+# ---------- dev (Vite dev server) ----------
+FROM base AS dev
+EXPOSE 5173
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+# ---------- test (Vitest, one-shot) ----------
+FROM base AS test
+CMD ["npm", "test"]
+
+# ---------- e2e (Playwright + bundled browsers) ----------
+FROM mcr.microsoft.com/playwright:v1.59.1-jammy AS e2e
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm install --no-audit --no-fund
+COPY . .
+CMD ["npm", "run", "e2e"]

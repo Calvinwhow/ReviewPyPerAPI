@@ -7,10 +7,12 @@ so the frontend can feed file paths into the ReviewPyPerAPI pipeline.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import uuid
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
@@ -168,3 +170,35 @@ async def save_api_key(project_id: str, api_key: str = Form(...)):
     key_path = project_dir / "api_key.txt"
     key_path.write_text(api_key.strip())
     return ApiKeyResponse(api_key_path=str(key_path))
+
+
+# --- Project state (source of truth lives in the project folder) ---
+#
+# Replaces the localStorage-only persistence in the frontend so review state
+# survives across browsers and users. The frontend may keep a localStorage
+# cache for offline UX, but the gateway is authoritative.
+
+
+@router.get("/projects/{project_id}/state")
+async def get_project_state(project_id: str) -> dict[str, Any]:
+    """Read the persisted JSON state for a project. Returns {} if missing."""
+    project_dir = _safe_path(project_id)
+    if not project_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Project not found")
+    state_path = project_dir / "state.json"
+    if not state_path.exists():
+        return {}
+    try:
+        return json.loads(state_path.read_text())
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Corrupt state.json")
+
+
+@router.put("/projects/{project_id}/state")
+async def put_project_state(project_id: str, state: dict[str, Any]) -> dict[str, Any]:
+    """Replace the project state. Returns the saved state."""
+    project_dir = _safe_path(project_id)
+    if not project_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Project not found")
+    (project_dir / "state.json").write_text(json.dumps(state, indent=2))
+    return state

@@ -1,0 +1,68 @@
+# Run all test suites in containers — no local node/python required.
+#
+#   docker compose -f docker-compose.test.yml run --rm frontend-unit
+#   docker compose -f docker-compose.test.yml run --rm gateway-tests
+#   docker compose -f docker-compose.test.yml run --rm e2e
+#
+# Or run everything:
+#   docker compose -f docker-compose.test.yml up --abort-on-container-exit \
+#       --exit-code-from e2e
+
+services:
+  # ---- Frontend Vitest unit tests ----
+  frontend-unit:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.test
+      target: test
+    command: npm test
+
+  # ---- Gateway pytest suite ----
+  gateway-tests:
+    build:
+      context: ./cli/gateway
+      dockerfile: Dockerfile.test
+    command: pytest -q
+
+  # ---- E2E stack: gateway + frontend dev server + Playwright ----
+  gateway-e2e:
+    build:
+      context: ./cli/gateway
+      dockerfile: Dockerfile
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - gateway-e2e-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  frontend-e2e:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.test
+      target: dev
+    environment:
+      # Vite dev proxy points /api → http://gateway-e2e:8001
+      VITE_API_PROXY: http://gateway-e2e:8001
+    depends_on:
+      gateway-e2e:
+        condition: service_healthy
+
+  e2e:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.test
+      target: e2e
+    environment:
+      PLAYWRIGHT_BASE_URL: http://frontend-e2e:5173
+      CI: "true"
+    depends_on:
+      - frontend-e2e
+      - gateway-e2e
+    command: npx playwright test --reporter=list
+
+volumes:
+  gateway-e2e-data:

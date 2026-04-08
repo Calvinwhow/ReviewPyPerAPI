@@ -1,0 +1,9 @@
+FROM python:3.11-slim
+WORKDIR /app
+
+COPY requirements-dev.txt requirements.txt ./
+RUN pip install --no-cache-dir -r requirements-dev.txt
+
+COPY . .
+ENV DATA_DIR=/tmp/gateway-test-data
+CMD ["pytest", "-q"]

@@ -1,0 +1,32 @@
+{
+  "testMode": true,
+  "settings": {
+    "defaultModel": "gpt3_small",
+    "defaultReviewType": "standard",
+    "defaultArticleType": "research",
+    "defaultPageThreshold": 50,
+    "defaultSummaryType": "llm"
+  },
+  "endpoints": {
+    "createProject": { "url": "/api/files/projects", "method": "POST", "description": "Create a new project folder" },
+    "listProjects": { "url": "/api/files/projects", "method": "GET", "description": "List all project folders" },
+    "deleteProject": { "url": "/api/files/projects/{projectId}", "method": "DELETE", "description": "Delete a project" },
+    "uploadFile": { "url": "/api/files/upload/{projectId}", "method": "POST", "description": "Upload a file to a project" },
+    "downloadFile": { "url": "/api/files/download/{path}", "method": "GET", "description": "Download a file" },
+    "listFiles": { "url": "/api/files/list/{projectId}", "method": "GET", "description": "List files in a project" },
+    "deleteFile": { "url": "/api/files/delete/{path}", "method": "DELETE", "description": "Delete a file" },
+    "saveApiKey": { "url": "/api/files/apikey/{projectId}", "method": "POST", "description": "Save API key to a file on disk" },
+    "getProjectState": { "url": "/api/files/projects/{projectId}/state", "method": "GET", "description": "Read persisted project state" },
+    "putProjectState": { "url": "/api/files/projects/{projectId}/state", "method": "PUT", "description": "Replace persisted project state" },
+    "screenTitles": { "url": "/api/pipeline/titles/screen", "method": "POST", "description": "Screen study titles using AI" },
+    "screenAbstracts": { "url": "/api/pipeline/abstracts/screen", "method": "POST", "description": "Screen abstracts using AI" },
+    "downloadPdfs": { "url": "/api/pipeline/pdfs/download", "method": "POST", "description": "Download PDFs from PubMed" },
+    "postprocessPdfs": { "url": "/api/pipeline/pdfs/postprocess", "method": "POST", "description": "Post-process downloaded PDFs" },
+    "ocrPdfs": { "url": "/api/pipeline/pdfs/ocr", "method": "POST", "description": "Extract text from PDFs via OCR" },
+    "preprocessText": { "url": "/api/pipeline/text/preprocess", "method": "POST", "description": "Preprocess extracted text" },
+    "labelSections": { "url": "/api/pipeline/sections/label", "method": "POST", "description": "Label paper sections" },
+    "evaluateInclusion": { "url": "/api/pipeline/inclusion/evaluate", "method": "POST", "description": "Evaluate inclusion/exclusion criteria" },
+    "evaluateExtraction": { "url": "/api/pipeline/extraction/evaluate", "method": "POST", "description": "Extract structured data from papers" },
+    "healthCheck": { "url": "/api/health", "method": "GET", "description": "Check if the gateway is running" }
+  }
+}
