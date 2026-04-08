@@ -1,0 +1,19 @@
+name: Real E2E (nightly)
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 6 AM UTC daily
+  workflow_dispatch: # allow manual trigger
+
+jobs:
+  real-e2e:
+    name: Real E2E (uses OpenAI tokens)
+    runs-on: ubuntu-latest
+    if: github.repository == 'Calvinwhow/ReviewPyPerAPI'
+    steps:
+      - uses: actions/checkout@v4
+      - run: >
+          docker compose -f docker-compose.real.yml up
+          --build --abort-on-container-exit --exit-code-from playwright-real
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
