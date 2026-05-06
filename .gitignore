@@ -23,6 +23,9 @@ playwright-report/
 .vscode/
 .idea/
 
+# Office lock files
+~$*
+
 # Data
 *.csv
 *.xlsx

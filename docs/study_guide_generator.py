@@ -172,14 +172,16 @@ def toc(doc: Doc):
         "    Part 3.5  —  hooks/useProjectState.ts (localStorage state)",
         "    Part 3.6  —  components/ui/FileUpload.tsx (drag-drop, size, progress)",
         "    Part 3.7  —  components/PipelineStepper.tsx (progress indicator)",
-        "    Part 3.8  —  pages/SetupReview.tsx (project + provider selection)",
+        "    Part 3.8  —  pages/SetupReview.tsx (project + API access)",
         "    Part 3.9  —  pages/TitleScreening.tsx (representative pipeline page)",
+        "    Part 3.10 —  pages/PdfProcessing.tsx (OA retrieval mode)",
         "Part 4  —  Build infrastructure",
         "    Part 4.1  —  Dockerfile.prod",
         "    Part 4.2  —  nginx.conf",
         "    Part 4.3  —  vite.config.ts",
         "    Part 4.4  —  index.css (Tailwind v4 design tokens)",
         "Part 5  —  Defense  ·  questions to be ready for",
+        "Part 6  —  Validation harness  ·  validation/",
     ]
     for item in items:
         doc.p(item)
@@ -1989,20 +1991,12 @@ def part3_stepper(doc: Doc):
 def part3_setupreview(doc: Doc):
     doc.h2("Part 3.8 — pages/SetupReview.tsx")
     doc.p(
-        "Step 1 of the pipeline: define the review and pick a provider. Recently rewritten "
-        "to remove the derived-state useEffect anti-pattern and add the OpenAI/Anthropic "
-        "switcher with managed-credits messaging."
-    )
-
-    doc.h3("Provider definitions")
-    doc.code_with_explain(
-        "type Provider = 'openai' | 'anthropic';\n\n"
-        "const PROVIDERS: { value: Provider; label: string; description: string }[] = [\n"
-        "  { value: 'openai', label: 'OpenAI', description: 'GPT-4o, GPT-4o-mini, GPT-4 Turbo' },\n"
-        "  { value: 'anthropic', label: 'Anthropic', description: 'Claude Opus, Sonnet, Haiku' },\n"
-        "];",
-        "Discriminated string union for type safety; if you typo a provider name elsewhere, "
-        "TS catches it at compile time. The PROVIDERS array drives the radio cards in the UI.",
+        "Step 1 of the pipeline: define the review and configure API access. The page was "
+        "rewritten to remove the derived-state useEffect anti-pattern. An earlier draft "
+        "exposed an OpenAI / Anthropic radio switcher; that was removed because the "
+        "backend currently only auto-saves the OpenAI key — the provider switch was "
+        "advertising a capability that wasn't end-to-end supported. The page now defaults "
+        "to OpenAI silently."
     )
 
     doc.h3("Setup phase — lazy init from existing")
@@ -2014,7 +2008,7 @@ def part3_setupreview(doc: Doc):
         "  const [name, setName] = useState(existing?.name ?? '');\n"
         "  const [question, setQuestion] = useState(existing?.research_question ?? '');\n"
         "  const [reviewType, setReviewType] = useState(existing?.review_type ?? settings.defaultReviewType);\n"
-        "  const [provider, setProvider] = useState<Provider>(existing?.llm_config?.provider ?? 'openai');",
+        "  const [userApiKey, setUserApiKey] = useState('');",
         "All initial values come from the EXISTING project (if any). useState's lazy-init "
         "function form means localStorage is read once at mount, not on every render. The "
         "form fields are then independently editable. This is the corrected pattern; the "
@@ -2038,7 +2032,7 @@ def part3_setupreview(doc: Doc):
     doc.code_with_explain(
         "    if (serverProject.api_key_path) {\n"
         "      setLLMConfig(id, {\n"
-        "        provider,\n"
+        "        provider: 'openai',\n"
         "        api_key: '(server-managed)',\n"
         "        model: settings.defaultModel,\n"
         "        model_choice: settings.defaultModel,\n"
@@ -2051,39 +2045,60 @@ def part3_setupreview(doc: Doc):
         "  };",
         "Two branches per ADR-0005: managed credits (server set OPENAI_API_KEY → api_key.txt "
         "already on disk) or user-supplied (POST the key, server saves it). Either way, "
-        "we record api_key_path in PipelineState so downstream pipeline calls have it.",
+        "we record api_key_path in PipelineState so downstream pipeline calls have it. "
+        "Provider is hardcoded to 'openai' since that is the only provider the backend "
+        "currently auto-saves a key for.",
+    )
+    doc.callout(
+        "Why the provider switcher was removed",
+        "The backend's create_project endpoint reads OPENAI_API_KEY from the environment "
+        "and writes it to api_key.txt. There's no parallel ANTHROPIC_API_KEY pickup, so "
+        "advertising both providers in the UI promised a capability the system wasn't "
+        "actually delivering end-to-end. Until ReviewPyper's pipeline routers natively "
+        "support Anthropic, the page sticks with one provider.",
+    )
+    doc.page_break()
+
+
+def part3_pdf(doc: Doc):
+    doc.h2("Part 3.10 — pages/PdfProcessing.tsx (OA retrieval mode)")
+    doc.p(
+        "Step 4 of the pipeline. The first sub-step downloads PDFs for every paper in the "
+        "screened master list. ReviewPyper's BulkPDFDownloaderV2 uses pypaperretriever, "
+        "which queries Unpaywall and PubMed Central for legally-free Open Access copies; "
+        "if no OA copy is found and Sci-Hub fallback is allowed, it tries Sci-Hub. Recent "
+        "UX work made the OA-only mode the prominent default."
     )
 
-    doc.h3("Provider radio cards")
-    doc.code(
-        """          <fieldset>
-            <legend className=\"sr-only\">Choose an AI provider</legend>
-            <div className=\"grid gap-3 sm:grid-cols-2\">
-              {PROVIDERS.map((p) => {
-                const selected = provider === p.value;
-                return (
-                  <label
-                    key={p.value}
-                    className={cn(
-                      'cursor-pointer rounded-md border px-4 py-3 transition-colors',
-                      selected ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)]' : 'border-[var(--color-border)] hover:border-[var(--color-border-strong)]',
-                    )}
-                  >
-                    <input type=\"radio\" name=\"provider\" value={p.value} checked={selected} onChange={() => setProvider(p.value)} className=\"sr-only\" />
-                    ...
-                  </label>
-                );
-              })}
-            </div>
-          </fieldset>
-"""
+    doc.h3("RetrievalMode union")
+    doc.code_with_explain(
+        "type RetrievalMode = 'oa' | 'oa_plus_scihub';\n\n"
+        "const RETRIEVAL_MODES: { value: RetrievalMode; label: string; description: string; icon: typeof Globe2 }[] = [\n"
+        "  { value: 'oa', label: 'Open Access only', description: 'PubMed + Unpaywall. Free, legal everywhere.', icon: Globe2 },\n"
+        "  { value: 'oa_plus_scihub', label: 'Include Sci-Hub fallback', description: 'Try OA first, then Sci-Hub for paywalled papers.', icon: Library },\n"
+        "];",
+        "Two-mode segmented control. The first option is the safe default — Unpaywall + "
+        "PubMed Central return only legally-free copies, so users who run this from "
+        "institutional networks face no compliance worry. The second option enables the "
+        "Sci-Hub fallback for paywalled papers; it's offered for completeness but isn't "
+        "the default. Backend-wise, both modes hit the same endpoint with allow_scihub "
+        "true or false.",
     )
-    doc.p(
-        "Visually rich \"radio cards\" pattern: the actual <input type=\"radio\"> is "
-        "screen-reader-only; the visible UI is the styled <label> wrapping it. Clicking "
-        "anywhere on the card activates the radio (because clicking a label fires its "
-        "associated input). The fieldset/legend pair is required for screen-reader "
-        "accessibility — fieldset groups related inputs, legend names the group."
+
+    doc.h3("Mode → backend boolean")
+    doc.code_with_explain(
+        "  const [retrievalMode, setRetrievalMode] = useState<RetrievalMode>('oa');\n"
+        "  const allowScihub = retrievalMode === 'oa_plus_scihub';",
+        "Derived boolean in render — no useEffect needed. allowScihub is the value "
+        "actually sent to the API; the segmented control is just UX sugar over a single "
+        "binary flag.",
+    )
+    doc.callout(
+        "What's already there for free",
+        "OA retrieval doesn't need new server code. ReviewPyper already calls Unpaywall "
+        "and PubMed Central when allow_scihub=False; the only thing the recent UX change "
+        "did was make this the obvious default. The button label even adapts to read "
+        "\"Retrieve OA PDFs\" in OA mode and \"Retrieve PDFs\" otherwise.",
     )
     doc.page_break()
 
@@ -2333,6 +2348,193 @@ export default defineConfig({
     doc.page_break()
 
 
+def part6_validation(doc: Doc):
+    doc.h1("Part 6 — Validation harness  ·  validation/")
+    doc.p(
+        "The validation/ directory is a standalone testing harness that drives the running "
+        "ReviewPyperAPI against published Cochrane benchmarks (CLEF-TAR 2017–2019 and "
+        "Cohen 2006) and reports recall, precision, F1, and WSS@95 against the gold "
+        "standard. None of this is wired into the application's runtime — it's a research "
+        "tool that talks to the same HTTP API a browser does."
+    )
+
+    doc.h2("Layout")
+    doc.code(
+        """validation/
+├── README.md                    overview of datasets and topic recommendations
+├── inventory.csv                246 rows, one per (year × type × split × topic)
+├── build_inventory.py           regenerates inventory.csv from clef-tar/
+├── clef-tar/                    full clone of CLEF-TAR (1.5 GB)
+├── cohen-2006/epc-ir.clean.tsv  15-topic gold standard, 18,733 rows
+├── run_validation.py            prep + score subcommands
+├── orchestrate.py               drives the full E2E flow against a running app
+├── build_slides.py              produces the validation slide deck
+├── runs/                        output CSVs and JSON metric reports
+├── figures/                     plots embedded in the slide deck
+└── slides/                      PPTX presentation"""
+    )
+
+    doc.h2("run_validation.py prep")
+    doc.p(
+        "Given a CLEF-TAR topic ID, fetches every paper's title and abstract from PubMed "
+        "and writes a CSV in ReviewPyper's expected column shape."
+    )
+    doc.code_with_explain(
+        "    # validation/run_validation.py\n"
+        "    parser.add_argument(\"topic\", help=\"CLEF-TAR topic ID, e.g. CD010355\")\n"
+        "    parser.add_argument(\"--out\", required=True, help=\"Output CSV path\")\n"
+        "    parser.add_argument(\"--email\", required=True, help=\"NCBI E-utilities requires an email\")\n"
+        "    parser.add_argument(\"--year\", choices=[\"2017\", \"2018\", \"2019\"])\n"
+        "    parser.add_argument(\"--split\", choices=[\"train\", \"test\"])\n"
+        "    parser.add_argument(\"--max-pmids\", type=int)",
+        "Topic ID is the only positional argument; year/split disambiguate when the same "
+        "topic appears in multiple slices. --email is forwarded to NCBI per their fair-use "
+        "policy. --max-pmids does a stratified sample (preserving include/exclude ratio) "
+        "for fast experimentation.",
+    )
+    doc.h3("PubMed fetch loop")
+    doc.code_with_explain(
+        "EFETCH_BATCH = 200  # NCBI hard cap\n"
+        "EFETCH_URL = \"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi\"\n\n"
+        "def fetch_pubmed_records(pmids, email, ...):\n"
+        "    for batch_idx in range(0, len(pmids), EFETCH_BATCH):\n"
+        "        batch = pmids[batch_idx : batch_idx + EFETCH_BATCH]\n"
+        "        params = urllib.parse.urlencode({\n"
+        "            \"db\": \"pubmed\", \"id\": \",\".join(batch),\n"
+        "            \"retmode\": \"xml\", \"rettype\": \"abstract\",\n"
+        "            \"tool\": tool, \"email\": email,\n"
+        "        })\n"
+        "        body = _http_get_with_retry(EFETCH_URL + \"?\" + params)\n"
+        "        out.update(_parse_efetch_xml(body))\n"
+        "        time.sleep(PUBMED_DELAY_SEC)",
+        "NCBI E-utilities accepts up to 200 PMIDs per request. We batch, parse XML, and "
+        "sleep 0.4s between batches to stay safely under the 3-req/s rate limit. The XML "
+        "parser handles structured AbstractText with section labels (Background:, Methods:, "
+        "Results:, Conclusions:) and concatenates them into one Abstract field.",
+    )
+
+    doc.h2("orchestrate.py — full E2E against the running app")
+    doc.p(
+        "Talks to the API the same way the React frontend does: through nginx on "
+        "localhost:3000/api. Three steps, plus a download to retrieve the screened CSV."
+    )
+    doc.code_with_explain(
+        "def create_project(base, name):\n"
+        "    body, ctype = _multipart_body({\"name\": name}, {})\n"
+        "    raw = _http(\"POST\", f\"{base}/files/projects\", body, {\"Content-Type\": ctype})\n"
+        "    return json.loads(raw)\n\n"
+        "def upload_file(base, project_id, path):\n"
+        "    body, ctype = _multipart_body(\n"
+        "        {\"subfolder\": \"\"}, {\"file\": (path.name, path.read_bytes())}\n"
+        "    )\n"
+        "    raw = _http(\"POST\", f\"{base}/files/upload/{project_id}\", body,\n"
+        "                {\"Content-Type\": ctype})\n"
+        "    return json.loads(raw)\n\n"
+        "def screen_titles(base, api_key_path, csv_path, question, model):\n"
+        "    payload = {\n"
+        "        \"api_key_path\": api_key_path, \"csv_path\": csv_path,\n"
+        "        \"question\": question, \"model_choice\": model,\n"
+        "    }\n"
+        "    raw = _http(\"POST\", f\"{base}/titles/screen\",\n"
+        "                json.dumps(payload).encode(),\n"
+        "                {\"Content-Type\": \"application/json\"})\n"
+        "    return json.loads(raw)",
+        "Three thin wrappers around the corresponding routes. Notice the multipart body "
+        "is built by hand (no requests dependency); we use stdlib only. The boundary is a "
+        "secure-random hex token so no input could collide with it. screen_titles posts "
+        "JSON because the pipeline routes accept Pydantic models, not form data — this is "
+        "the same shape the frontend's pipelineApi.screenTitles sends.",
+    )
+
+    doc.h2("run_validation.py score")
+    doc.p(
+        "Compares the AI's predictions to the gold qrels. Computes recall, precision, F1, "
+        "accuracy, and a binary approximation of WSS@95."
+    )
+    doc.code_with_explain(
+        "def _read_predictions(path):\n"
+        "    pred_col_candidates = (\"OpenAI_Screen\", \"AI_Screen\", \"Screen\", ...)\n"
+        "    col = next(c for c in pred_col_candidates if c in reader.fieldnames)\n"
+        "    for row in reader:\n"
+        "        v = (row.get(col) or \"\").strip().lower()\n"
+        "        if v in (\"1\", \"true\", \"yes\") or v.startswith(\"incl\"):\n"
+        "            pred[pmid] = \"Include\"\n"
+        "        elif v in (\"0\", \"false\", \"no\") or v.startswith(\"excl\"):\n"
+        "            pred[pmid] = \"Exclude\"",
+        "Tolerates several spellings of the prediction column and several spellings of "
+        "the value (1/0, true/false, Include/Exclude). ReviewPyper writes 1/0 by default "
+        "but earlier configs used Include/Exclude — handling both lets us re-run old "
+        "outputs.",
+    )
+    doc.code_with_explain(
+        "def _wss(labels, scores, target_recall=0.95):\n"
+        "    pairs = sorted(zip(scores, labels), key=lambda p: -p[0])\n"
+        "    tp = 0\n"
+        "    for k, (_, lab) in enumerate(pairs, start=1):\n"
+        "        if lab == 1:\n"
+        "            tp += 1\n"
+        "        if tp / n_pos >= target_recall:\n"
+        "            return (n - k) / n - (1 - target_recall)\n"
+        "    return 0.0",
+        "Cohen 2006's Work Saved over Sampling at 95% recall: rank papers by predicted "
+        "relevance, walk the ranking until you've recovered 95% of the true includes, and "
+        "report the fraction of the corpus you saved over a random screen. Without "
+        "continuous scores (ReviewPyper currently outputs binary 0/1), this collapses to "
+        "a coarse approximation — but it's still informative as a sanity check.",
+    )
+
+    doc.h2("How to run a validation")
+    doc.code(
+        """# 1. Generate the input CSV from CLEF-TAR + PubMed
+python3 validation/run_validation.py prep CD010355 \\
+    --out validation/runs/CD010355_input.csv \\
+    --email you@example.com --year 2019 --split train
+
+# 2. Drive the full flow against the running app
+python3 validation/orchestrate.py \\
+    --input validation/runs/CD010355_input.csv \\
+    --question "What is the effectiveness of NIPPV for prevention of...?" \\
+    --api-base http://localhost:3000/api \\
+    --out-screened validation/runs/CD010355_screened_gpt41.csv \\
+    --model gpt4.1
+
+# 3. Score against gold
+python3 validation/run_validation.py score \\
+    --predictions validation/runs/CD010355_screened_gpt41.csv \\
+    --topic CD010355 --year 2019 --split train \\
+    --report validation/runs/CD010355_metrics_gpt41.json
+
+# 4. Build the slide deck
+python3 validation/build_slides.py
+"""
+    )
+    doc.callout(
+        "Cost reference",
+        "43-record run on gpt-3.5-turbo: ≈ $0.04. Same run on gpt-4.1: ≈ $0.70. "
+        "A full Cochrane-scale topic (e.g. CD010705 with 228 records) on gpt-4.1: ≈ $4. "
+        "$100 of OpenAI credit covers ~25 full-Cochrane-scale runs.",
+    )
+
+    doc.h2("First pilot results — CD010355")
+    doc.p(
+        "On topic CD010355 (NIPPV for post-pulmonary-resection complications, n=43, 9 "
+        "gold-included), the off-the-shelf ReviewPyper title screener with two different "
+        "models produced:"
+    )
+    doc.code(
+        """Model            Recall   Precision   F1     Accuracy
+gpt-3.5-turbo    0.444    0.333       0.381   0.698
+gpt-4.1          0.667    0.750       0.706   0.884"""
+    )
+    doc.p(
+        "GPT-4.1 nearly doubled F1 over GPT-3.5 with no other code change. For published "
+        "Cochrane reviews, recall must reach ~0.95 — neither model crosses that bar yet, "
+        "and prompt engineering plus active learning are obvious next levers. The full "
+        "writeup lives in validation/slides/ReviewPyperAPI_validation.pptx."
+    )
+    doc.page_break()
+
+
 def part5(doc: Doc):
     doc.h1("Part 5 — Defense  ·  questions to be ready for")
     doc.p(
@@ -2396,8 +2598,10 @@ def main():
     part3_stepper(doc)
     part3_setupreview(doc)
     part3_titlescreening(doc)
+    part3_pdf(doc)
     part4(doc)
     part5(doc)
+    part6_validation(doc)
 
     out = Path(__file__).resolve().parent / "ReviewPyPerAPI_line_by_line.docx"
     doc.save(out)

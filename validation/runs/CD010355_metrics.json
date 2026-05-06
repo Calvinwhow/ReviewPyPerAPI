@@ -1,0 +1,19 @@
+{
+  "topic": "CD010355",
+  "title": "Non\u2010invasive positive pressure ventilation for prevention of complications after pulmonary resection in lung cancer patients",
+  "slice": "2019/Intervention/train",
+  "n_records_scored": 43,
+  "n_included_gold": 9,
+  "n_excluded_gold": 34,
+  "tp": 4,
+  "fp": 8,
+  "fn": 5,
+  "tn": 26,
+  "recall": 0.4444444444444444,
+  "precision": 0.3333333333333333,
+  "f1": 0.380952380952381,
+  "accuracy": 0.6976744186046512,
+  "wss_at_95_binary": 0.11279069767441857,
+  "missing_predictions": 0,
+  "predictions_not_in_gold": 0
+}
