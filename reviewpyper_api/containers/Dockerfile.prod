@@ -33,7 +33,7 @@ RUN sed '/^textract/Id' /app/ReviewPyper/requirements.txt > /tmp/reqs.txt \
     'extract-msg<0.30' 'pdfminer.six==20191110' \
     'python-pptx~=0.6.18' 'six~=1.12.0' 'SpeechRecognition~=3.8.1' \
     'xlrd~=1.2.0' \
- && pip install --no-cache-dir fastapi 'uvicorn[standard]'
+ && pip install --no-cache-dir fastapi 'uvicorn[standard]' python-multipart
 
 ENV PYTHONPATH=/app/reviewpyper_api:/app:/app/ReviewPyper
 ENV DATA_DIR=/data

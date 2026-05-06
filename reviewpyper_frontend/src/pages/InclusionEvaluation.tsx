@@ -12,7 +12,7 @@ import { useConfig } from '../hooks/useConfig';
 export default function InclusionEvaluation() {
   const navigate = useNavigate();
   const { settings } = useConfig();
-  const projectId = localStorage.getItem('reviewpyper_project_id') ?? '';
+  const [projectId] = useState(() => localStorage.getItem('reviewpyper_project_id') ?? '');
   const { getPipelineState, updatePipelineState } = useProjectState();
   const pipeline = getPipelineState(projectId);
   const [keysToConsider, setKeysToConsider] = useState<string[]>(['methods', 'results']);
@@ -37,8 +37,12 @@ export default function InclusionEvaluation() {
   };
 
   return (
-    <div className="space-y-6">
-      <div><h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3"><ClipboardCheck className="h-7 w-7 text-primary-600" />Inclusion Evaluation</h1><p className="text-gray-500 mt-1">Evaluate papers against inclusion/exclusion criteria.</p></div>
+    <div className="space-y-8">
+      <header>
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--color-muted-foreground)]">Step 06</p>
+        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-[var(--color-foreground)] flex items-center gap-3"><ClipboardCheck className="h-7 w-7 text-[var(--color-primary)]" aria-hidden="true" />Inclusion Evaluation</h1>
+        <p className="mt-2 max-w-2xl text-sm text-[var(--color-muted-foreground)]">Score each paper against your inclusion criteria. The model returns confidence per criterion.</p>
+      </header>
       {!pipeline.json_dir && <Alert variant="warning">Complete Text & Sections first.</Alert>}
       <Card>
         <CardHeader><CardTitle>Sections to Evaluate</CardTitle></CardHeader>

@@ -32,7 +32,7 @@ describe('getErrorMessage', () => {
 
   it('returns friendly message for network errors', () => {
     const err = new AxiosError('Network Error', 'ERR_NETWORK');
-    expect(getErrorMessage(err)).toMatch(/Cannot reach the gateway/);
+    expect(getErrorMessage(err)).toMatch(/Cannot reach the API/);
   });
 
   it('handles plain Error', () => {

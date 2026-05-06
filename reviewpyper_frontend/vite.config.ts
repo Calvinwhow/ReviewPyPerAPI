@@ -10,7 +10,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_PROXY || 'http://localhost:8001',
+        target: process.env.VITE_API_PROXY || 'http://localhost:8000',
         rewrite: (path) => path.replace(/^\/api/, ''),
       }
     }

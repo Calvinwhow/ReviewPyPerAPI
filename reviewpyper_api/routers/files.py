@@ -14,6 +14,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+import anyio
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -22,11 +23,19 @@ router = APIRouter(prefix="/files", tags=["files"])
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "./data")).resolve()
 
+# Stream uploads to disk in 1 MB chunks so a large CSV doesn't sit in RAM.
+UPLOAD_CHUNK_SIZE = 1024 * 1024
+
 
 def _safe_path(relative: str) -> Path:
-    """Resolve a relative path under DATA_DIR, preventing traversal."""
+    """Resolve a relative path under DATA_DIR, preventing traversal.
+
+    Uses Path.is_relative_to so '/data/foobar' is correctly rejected even
+    when DATA_DIR is '/data/foo' (string prefix matching has a known
+    false-positive on shared name prefixes).
+    """
     resolved = (DATA_DIR / relative).resolve()
-    if not str(resolved).startswith(str(DATA_DIR)):
+    if not resolved.is_relative_to(DATA_DIR):
         raise HTTPException(status_code=400, detail="Invalid path")
     return resolved
 
@@ -34,6 +43,7 @@ def _safe_path(relative: str) -> Path:
 class ProjectInfo(BaseModel):
     project_id: str
     path: str
+    api_key_path: str | None = None
 
 
 class FileInfo(BaseModel):
@@ -52,18 +62,26 @@ class ApiKeyResponse(BaseModel):
     api_key_path: str
 
 
-# --- Project management (a project = a folder) ---
-
-
 @router.post("/projects", response_model=ProjectInfo)
 async def create_project(name: str = Form(...)):
-    """Create a new project folder in /data."""
+    """Create a new project folder in /data.
+
+    If the OPENAI_API_KEY env var is set, the key is automatically saved
+    into the project so users don't need to provide their own.
+    """
     project_id = uuid.uuid4().hex[:12]
     project_dir = DATA_DIR / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
-    # Store project name as metadata
     (project_dir / ".project_name").write_text(name)
-    return ProjectInfo(project_id=project_id, path=str(project_dir))
+
+    api_key_path = None
+    server_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if server_key:
+        key_file = project_dir / "api_key.txt"
+        key_file.write_text(server_key)
+        api_key_path = str(key_file)
+
+    return ProjectInfo(project_id=project_id, path=str(project_dir), api_key_path=api_key_path)
 
 
 @router.get("/projects", response_model=list[ProjectInfo])
@@ -87,26 +105,31 @@ async def delete_project(project_id: str):
     return {"deleted": project_id}
 
 
-# --- File operations ---
-
-
 @router.post("/upload/{project_id}", response_model=UploadResponse)
 async def upload_file(
     project_id: str,
     file: UploadFile = File(...),
     subfolder: str = Form(""),
 ):
-    """Upload a file into a project folder."""
+    """Upload a file into a project folder.
+
+    Streams the body to disk in chunks via anyio.to_thread so the event loop
+    stays responsive even for multi-hundred-MB CSV uploads.
+    """
     project_dir = _safe_path(project_id)
     if not project_dir.is_dir():
         raise HTTPException(status_code=404, detail="Project not found")
 
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing filename")
+
     target_dir = project_dir / subfolder if subfolder else project_dir
     target_dir.mkdir(parents=True, exist_ok=True)
-
     dest = target_dir / file.filename
-    with open(dest, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+
+    async with await anyio.open_file(dest, "wb") as f:
+        while chunk := await file.read(UPLOAD_CHUNK_SIZE):
+            await f.write(chunk)
 
     return UploadResponse(filename=file.filename, path=str(dest))
 
@@ -153,9 +176,6 @@ async def delete_file(path: str):
     return {"deleted": str(file_path)}
 
 
-# --- API key helper ---
-
-
 @router.post("/apikey/{project_id}", response_model=ApiKeyResponse)
 async def save_api_key(project_id: str, api_key: str = Form(...)):
     """Save an API key to a file in the project folder.
@@ -170,13 +190,6 @@ async def save_api_key(project_id: str, api_key: str = Form(...)):
     key_path = project_dir / "api_key.txt"
     key_path.write_text(api_key.strip())
     return ApiKeyResponse(api_key_path=str(key_path))
-
-
-# --- Project state (source of truth lives in the project folder) ---
-#
-# Replaces the localStorage-only persistence in the frontend so review state
-# survives across browsers and users. The frontend may keep a localStorage
-# cache for offline UX, but the gateway is authoritative.
 
 
 @router.get("/projects/{project_id}/state")

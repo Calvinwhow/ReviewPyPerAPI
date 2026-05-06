@@ -8,7 +8,7 @@ export function getErrorMessage(err: unknown): string {
     const detail = err.response?.data?.detail;
     if (typeof detail === 'string') return detail;
     if (detail) return JSON.stringify(detail);
-    if (err.code === 'ERR_NETWORK') return 'Cannot reach the gateway. Is it running?';
+    if (err.code === 'ERR_NETWORK') return 'Cannot reach the API. Is it running?';
     return err.message;
   }
   if (err instanceof Error) return err.message;

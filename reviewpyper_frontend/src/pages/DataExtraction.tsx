@@ -10,7 +10,7 @@ import { useConfig } from '../hooks/useConfig';
 
 export default function DataExtraction() {
   const { settings } = useConfig();
-  const projectId = localStorage.getItem('reviewpyper_project_id') ?? '';
+  const [projectId] = useState(() => localStorage.getItem('reviewpyper_project_id') ?? '');
   const { getPipelineState, updatePipelineState } = useProjectState();
   const pipeline = getPipelineState(projectId);
   const [keysToConsider, setKeysToConsider] = useState<string[]>(['methods', 'results']);
@@ -36,8 +36,12 @@ export default function DataExtraction() {
   };
 
   return (
-    <div className="space-y-6">
-      <div><h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3"><FlaskConical className="h-7 w-7 text-primary-600" />Data Extraction</h1><p className="text-gray-500 mt-1">Extract structured data from included papers.</p></div>
+    <div className="space-y-8">
+      <header>
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--color-muted-foreground)]">Step 07</p>
+        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-[var(--color-foreground)] flex items-center gap-3"><FlaskConical className="h-7 w-7 text-[var(--color-primary)]" aria-hidden="true" />Data Extraction</h1>
+        <p className="mt-2 max-w-2xl text-sm text-[var(--color-muted-foreground)]">Define extraction questions and pull structured answers from each included paper.</p>
+      </header>
       {!pipeline.inclusion_automated_csv_path && <Alert variant="warning">Complete Inclusion Evaluation first.</Alert>}
       <Card>
         <CardHeader><CardTitle>Sections to Extract From</CardTitle></CardHeader>

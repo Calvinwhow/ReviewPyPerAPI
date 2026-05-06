@@ -13,11 +13,23 @@ export const filesApi = {
   },
   listProjects: (config: AppConfig) => http.get<ProjectInfo[]>(resolveEndpoint(config, 'listProjects')).then(r => r.data),
   deleteProject: (config: AppConfig, projectId: string) => http.delete(resolveEndpoint(config, 'deleteProject', { projectId })).then(r => r.data),
-  upload: (config: AppConfig, projectId: string, file: File, subfolder = '') => {
+  upload: (
+    config: AppConfig,
+    projectId: string,
+    file: File,
+    subfolder = '',
+    onProgress?: (fraction: number) => void,
+  ) => {
     const form = new FormData();
     form.append('file', file);
     form.append('subfolder', subfolder);
-    return http.post<UploadResponse>(resolveEndpoint(config, 'uploadFile', { projectId }), form, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+    return http
+      .post<UploadResponse>(resolveEndpoint(config, 'uploadFile', { projectId }), form, {
+        onUploadProgress: (e) => {
+          if (onProgress && e.total) onProgress(e.loaded / e.total);
+        },
+      })
+      .then((r) => r.data);
   },
   download: (config: AppConfig, path: string) => http.get(resolveEndpoint(config, 'downloadFile', { path }), { responseType: 'blob' }).then(r => r.data),
   list: (config: AppConfig, projectId: string, subfolder = '') => http.get<FileInfo[]>(resolveEndpoint(config, 'listFiles', { projectId }), { params: { subfolder } }).then(r => r.data),

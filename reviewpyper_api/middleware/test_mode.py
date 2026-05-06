@@ -1,12 +1,8 @@
-"""Transparent proxy to ReviewPyPerAPI.
+"""Test-mode middleware.
 
-Every POST to /pipeline/{path} is forwarded as-is to the ReviewPyPerAPI
-container. The gateway adds nothing — request body in, response body out.
-This preserves the stateless, file-based architecture of ReviewPyPerAPI.
-
-When ?test=true is passed, the gateway returns synthetic data directly
-without contacting ReviewPyPerAPI. It also creates real files on disk
-so the file browser and pipeline state work end-to-end.
+When ?test=true is passed on a pipeline endpoint, the middleware returns
+synthetic data directly without invoking the real handler. It also creates
+real files on disk so the file browser and pipeline state work end-to-end.
 """
 
 from __future__ import annotations
@@ -16,21 +12,12 @@ import json
 import os
 from pathlib import Path
 
-import httpx
-from fastapi import APIRouter, Query, Request, HTTPException
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
-router = APIRouter(prefix="/pipeline", tags=["pipeline"])
-
-REVIEWPYPER_API_URL = os.environ.get("REVIEWPYPER_API_URL", "http://localhost:8000")
 DATA_DIR = Path(os.environ.get("DATA_DIR", "./data")).resolve()
 
-# Long timeout: screening/extraction can take minutes
-_client = httpx.AsyncClient(base_url=REVIEWPYPER_API_URL, timeout=600.0)
-
-
-# ---------------------------------------------------------------------------
-# Synthetic test data
-# ---------------------------------------------------------------------------
 
 SYNTHETIC_STUDIES = [
     {
@@ -103,7 +90,7 @@ SYNTHETIC_EXTRACTION = {
     "mean_improvement": "35.2% reduction in active group vs 12.1% in sham",
     "adverse_events": "2 infections (5%), 1 lead migration (2.5%)",
     "follow_up_duration": "24 months",
-    "responder_rate": "60% (≥35% Y-BOCS reduction)",
+    "responder_rate": "60% (>=35% Y-BOCS reduction)",
 }
 
 SYNTHETIC_INCLUSION = {
@@ -149,10 +136,6 @@ def _get_test_dir(body: dict) -> str:
     return str(DATA_DIR / "test_project")
 
 
-# ---------------------------------------------------------------------------
-# Test data generators per endpoint
-# ---------------------------------------------------------------------------
-
 def _test_titles_screen(body: dict) -> dict:
     project_dir = _get_test_dir(body)
     csv_path = f"{project_dir}/references_title_screened.csv"
@@ -174,7 +157,6 @@ def _test_pdfs_download(body: dict) -> dict:
     csv_path = f"{project_dir}/pdfs_downloaded.csv"
     rows = [{"PMID": s["PMID"], "Title": s["Title"], "PDF_Path": f"{project_dir}/PDFs/{s['PMID']}.pdf"} for s in SYNTHETIC_STUDIES[:3]]
     _write_csv(csv_path, rows)
-    # Create dummy PDF files
     pdf_dir = _ensure_dir(f"{project_dir}/PDFs")
     for s in SYNTHETIC_STUDIES[:3]:
         (pdf_dir / f"{s['PMID']}.pdf").write_text(f"[Synthetic PDF for {s['Title']}]")
@@ -267,58 +249,31 @@ def _test_extraction_evaluate(body: dict) -> dict:
     return {"filtered_json_path": filtered, "evaluated_json_path": evaluated, "raw_csv_path": raw_csv, "automated_csv_path": auto_csv}
 
 
-# Map endpoint paths to test handlers
 _TEST_HANDLERS: dict[str, callable] = {
-    "titles/screen": _test_titles_screen,
-    "abstracts/screen": _test_abstracts_screen,
-    "pdfs/download": _test_pdfs_download,
-    "pdfs/postprocess": _test_pdfs_postprocess,
-    "pdfs/ocr": _test_pdfs_ocr,
-    "text/preprocess": _test_text_preprocess,
-    "sections/label": _test_sections_label,
-    "inclusion/evaluate": _test_inclusion_evaluate,
-    "extraction/evaluate": _test_extraction_evaluate,
+    "/titles/screen": _test_titles_screen,
+    "/abstracts/screen": _test_abstracts_screen,
+    "/pdfs/download": _test_pdfs_download,
+    "/pdfs/postprocess": _test_pdfs_postprocess,
+    "/pdfs/ocr": _test_pdfs_ocr,
+    "/text/preprocess": _test_text_preprocess,
+    "/sections/label": _test_sections_label,
+    "/inclusion/evaluate": _test_inclusion_evaluate,
+    "/extraction/evaluate": _test_extraction_evaluate,
 }
 
 
-# ---------------------------------------------------------------------------
-# Router
-# ---------------------------------------------------------------------------
+class TestModeMiddleware(BaseHTTPMiddleware):
+    """Intercept requests with ?test=true and return synthetic pipeline data."""
 
-@router.post("/{path:path}")
-async def proxy_to_reviewpyper(path: str, request: Request, test: bool = Query(False)):
-    """Forward any POST request to ReviewPyPerAPI unchanged.
+    async def dispatch(self, request: Request, call_next):
+        if request.query_params.get("test") == "true":
+            handler = _TEST_HANDLERS.get(request.url.path)
+            if handler:
+                try:
+                    body = await request.json()
+                except Exception:
+                    body = {}
+                return JSONResponse(handler(body))
+            return JSONResponse({"error": f"No test handler for path: {request.url.path}"})
 
-    When test=true, returns synthetic data directly from the gateway
-    without contacting ReviewPyPerAPI. Creates real files on disk.
-    """
-    body_bytes = await request.body()
-
-    # --- Test mode: return synthetic data ---
-    if test:
-        try:
-            body = json.loads(body_bytes) if body_bytes else {}
-        except json.JSONDecodeError:
-            body = {}
-
-        handler = _TEST_HANDLERS.get(path)
-        if handler:
-            return handler(body)
-        return {"error": f"No test handler for path: {path}"}
-
-    # --- Real mode: proxy to ReviewPyPerAPI ---
-    content_type = request.headers.get("content-type", "application/json")
-
-    try:
-        response = await _client.post(
-            f"/{path}",
-            content=body_bytes,
-            headers={"content-type": content_type},
-        )
-    except httpx.ConnectError:
-        raise HTTPException(
-            status_code=503,
-            detail="ReviewPyPerAPI is not reachable. Is the Docker container running?",
-        )
-
-    return response.json()
+        return await call_next(request)

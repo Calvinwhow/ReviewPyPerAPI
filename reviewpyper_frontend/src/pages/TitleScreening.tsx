@@ -6,15 +6,17 @@ import Button from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import FileUpload from '../components/ui/FileUpload';
 import Alert from '../components/ui/Alert';
-import Spinner from '../components/ui/Spinner';
+import ProgressBar from '../components/ui/ProgressBar';
 import { useUploadFile, useScreenTitles } from '../hooks/useApi';
 import { useProjectState } from '../hooks/useProjectState';
 import { useConfig } from '../hooks/useConfig';
 
+const MAX_UPLOAD_MB = 500;
+
 export default function TitleScreening() {
   const navigate = useNavigate();
   const { settings } = useConfig();
-  const projectId = localStorage.getItem('reviewpyper_project_id') ?? '';
+  const [projectId] = useState(() => localStorage.getItem('reviewpyper_project_id') ?? '');
   const { getProject, getPipelineState, updatePipelineState } = useProjectState();
   const project = getProject(projectId);
   const pipeline = getPipelineState(projectId);
@@ -22,14 +24,27 @@ export default function TitleScreening() {
   const [isScreening, setIsScreening] = useState(false);
   const [uploadedPath, setUploadedPath] = useState(pipeline.csv_path ?? '');
   const [outputPath, setOutputPath] = useState(pipeline.title_output_csv_path ?? '');
+  const [uploadFraction, setUploadFraction] = useState<number | undefined>(undefined);
+  const [uploadedFile, setUploadedFile] = useState<{ name: string; size: number } | null>(null);
   const uploadFile = useUploadFile();
   const screenTitles = useScreenTitles();
 
   const handleUpload = useCallback(async (files: File[]) => {
     if (!files.length || !projectId) return;
-    const result = await uploadFile.mutateAsync({ projectId, file: files[0] });
-    setUploadedPath(result.path);
-    updatePipelineState(projectId, { csv_path: result.path });
+    const file = files[0];
+    setUploadFraction(0);
+    setUploadedFile({ name: file.name, size: file.size });
+    try {
+      const result = await uploadFile.mutateAsync({
+        projectId,
+        file,
+        onProgress: (f) => setUploadFraction(f),
+      });
+      setUploadedPath(result.path);
+      updatePipelineState(projectId, { csv_path: result.path });
+    } finally {
+      setUploadFraction(undefined);
+    }
   }, [projectId, uploadFile, updatePipelineState]);
 
   const handleScreen = async () => {
@@ -43,15 +58,52 @@ export default function TitleScreening() {
   };
 
   return (
-    <div className="space-y-6">
-      <div><h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3"><FileText className="h-7 w-7 text-primary-600" />Title Screening</h1><p className="text-gray-500 mt-1">Upload a references CSV and screen titles using AI.</p></div>
-      {!pipeline.api_key_path && <Alert variant="warning">Configure your API key in Setup first.</Alert>}
+    <div className="space-y-8">
+      <header>
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--color-muted-foreground)]">
+          Step 02
+        </p>
+        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-[var(--color-foreground)] flex items-center gap-3">
+          <FileText className="h-7 w-7 text-[var(--color-primary)]" aria-hidden="true" />
+          Title Screening
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm text-[var(--color-muted-foreground)]">
+          Upload your references CSV. The AI will rate every title for relevance to your research question.
+        </p>
+      </header>
+      {!pipeline.api_key_path && <Alert variant="warning">Create a project in Setup first.</Alert>}
       <Card>
         <CardHeader><CardTitle>Upload References CSV</CardTitle><CardDescription>Upload the CSV file exported from your literature search.</CardDescription></CardHeader>
         <CardBody>
-          <FileUpload accept=".csv" onFiles={handleUpload} label="Drop CSV file here" hint="CSV file from PubMed or other database export" />
-          {uploadFile.isPending && <Spinner label="Uploading..." className="mt-4" />}
-          {uploadedPath && !uploadFile.isPending && <Alert variant="success" className="mt-4">File uploaded: <code className="text-xs">{uploadedPath.split('/').pop()}</code></Alert>}
+          <FileUpload
+            accept=".csv"
+            onFiles={handleUpload}
+            label="Drop CSV file here or click to browse"
+            hint="CSV file from PubMed or other database export"
+            maxSizeMB={MAX_UPLOAD_MB}
+            disabled={uploadFile.isPending}
+          />
+          {uploadFile.isPending && uploadedFile && (
+            <div className="mt-4" role="status" aria-live="polite">
+              <ProgressBar
+                value={uploadFraction}
+                label={`Uploading ${uploadedFile.name} · ${
+                  uploadFraction !== undefined ? `${Math.round(uploadFraction * 100)}%` : 'preparing…'
+                }`}
+              />
+            </div>
+          )}
+          {uploadedPath && !uploadFile.isPending && uploadedFile && (
+            <Alert variant="success" className="mt-4">
+              Uploaded <code className="text-xs font-mono">{uploadedFile.name}</code>{' '}
+              <span className="text-gray-500">({(uploadedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+            </Alert>
+          )}
+          {uploadFile.isError && (
+            <Alert variant="error" className="mt-4" title="Upload failed">
+              {(uploadFile.error as Error)?.message ?? 'Unknown error'}
+            </Alert>
+          )}
         </CardBody>
       </Card>
       {uploadedPath && (

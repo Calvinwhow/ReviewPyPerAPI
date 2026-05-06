@@ -11,7 +11,7 @@ import path from 'node:path';
  * Inside docker compose, both env vars come from `docker-compose.real.yml`.
  *
  * Pre-conditions:
- *   - reviewpyper-api container is up on the same network as the gateway
+ *   - reviewpyper-api container is up
  *   - The frontend is served with /config.json having "testMode": false
  *     (handled by mounting public/config.real.json -> public/config.json
  *     in docker-compose.real.yml).

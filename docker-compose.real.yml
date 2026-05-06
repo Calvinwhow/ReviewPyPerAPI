@@ -1,6 +1,6 @@
 # Real-data E2E stack: spins up the actual reviewpyper_api alongside the
-# gateway, frontend, and Playwright. Costs real OpenAI tokens — only run
-# manually or in a nightly job.
+# frontend and Playwright. Costs real OpenAI tokens — only run manually
+# or in a nightly job.
 #
 # Usage:
 #   export OPENAI_API_KEY=sk-...
@@ -17,30 +17,15 @@ services:
     build:
       context: .
       dockerfile: reviewpyper_api/containers/Dockerfile.prod
-    volumes:
-      - shared-data:/data
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-
-  gateway-real:
-    build:
-      context: ./reviewpyper_gateway
-      dockerfile: Dockerfile
     environment:
       DATA_DIR: /data
-      REVIEWPYPER_API_URL: http://reviewpyper-api:8000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY must be set in your shell}
     volumes:
       - shared-data:/data
-    depends_on:
-      reviewpyper-api:
-        condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
-      interval: 2s
-      timeout: 2s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
       retries: 30
 
   frontend-real:
@@ -49,12 +34,11 @@ services:
       dockerfile: Dockerfile.test
       target: dev
     environment:
-      VITE_API_PROXY: http://gateway-real:8001
-    # Mount the testMode:false config on top of the in-image testMode:true one.
+      VITE_API_PROXY: http://reviewpyper-api:8000
     volumes:
       - ./reviewpyper_frontend/public/config.real.json:/app/public/config.json:ro
     depends_on:
-      gateway-real:
+      reviewpyper-api:
         condition: service_healthy
 
   playwright-real:
@@ -69,7 +53,7 @@ services:
       CI: "true"
     depends_on:
       - frontend-real
-      - gateway-real
+      - reviewpyper-api
     command: npx playwright test real.spec.ts --reporter=list
 
 volumes:

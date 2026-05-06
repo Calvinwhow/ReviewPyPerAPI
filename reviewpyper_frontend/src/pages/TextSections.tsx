@@ -14,7 +14,7 @@ const ARTICLE_TYPES = [{ value: 'research', label: 'Research Article' }, { value
 export default function TextSections() {
   const navigate = useNavigate();
   const { settings } = useConfig();
-  const projectId = localStorage.getItem('reviewpyper_project_id') ?? '';
+  const [projectId] = useState(() => localStorage.getItem('reviewpyper_project_id') ?? '');
   const { getProject, getPipelineState, updatePipelineState } = useProjectState();
   const project = getProject(projectId);
   const pipeline = getPipelineState(projectId);
@@ -28,8 +28,12 @@ export default function TextSections() {
   const handleLabel = async () => { if (!pipeline.preprocessed_dir) return; setIsLabeling(true); try { const result = await labelSections.mutateAsync({ folder_path: pipeline.preprocessed_dir, article_type: articleType, api_key_path: pipeline.api_key_path ?? null, question: project?.research_question ?? null }); updatePipelineState(projectId, { json_dir: result.json_dir }); } finally { setIsLabeling(false); } };
 
   return (
-    <div className="space-y-6">
-      <div><h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3"><FileType className="h-7 w-7 text-primary-600" />Text & Sections</h1><p className="text-gray-500 mt-1">Preprocess text and label paper sections.</p></div>
+    <div className="space-y-8">
+      <header>
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--color-muted-foreground)]">Step 05</p>
+        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-[var(--color-foreground)] flex items-center gap-3"><FileType className="h-7 w-7 text-[var(--color-primary)]" aria-hidden="true" />Text &amp; Sections</h1>
+        <p className="mt-2 max-w-2xl text-sm text-[var(--color-muted-foreground)]">Preprocess raw text and label structural sections (methods, results, discussion).</p>
+      </header>
       {!pipeline.ocr_output_dir && <Alert variant="warning">Complete PDF Processing (OCR) first.</Alert>}
       <Card>
         <CardHeader><CardTitle><span className="flex items-center gap-2"><Layers className="h-5 w-5 text-primary-600" />Step 1: Preprocess Text</span></CardTitle></CardHeader>

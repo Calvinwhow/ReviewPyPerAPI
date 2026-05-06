@@ -18,7 +18,7 @@ describe('resolveEndpoint', () => {
 
   it('appends ?test=true for pipeline endpoints when testMode is on', () => {
     const cfg = { ...testConfig, testMode: true };
-    expect(resolveEndpoint(cfg, 'screenTitles')).toBe('/api/pipeline/titles/screen?test=true');
+    expect(resolveEndpoint(cfg, 'screenTitles')).toBe('/api/titles/screen?test=true');
   });
 
   it('does not append ?test=true to non-pipeline endpoints in testMode', () => {

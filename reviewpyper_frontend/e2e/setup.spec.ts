@@ -2,12 +2,11 @@ import { test, expect } from '@playwright/test';
 
 /**
  * Smoke test for the SetupReview page driving real requests through the
- * gateway in `?test=true` mode (synthetic data, real files written).
+ * API in `?test=true` mode (synthetic data, real files written).
  *
  * The full pipeline (title → extraction) is exercised at the API level
  * by the pytest suite. Here we verify the boot path: app loads, project
- * is created on the gateway, API key is persisted to disk, navigation
- * works.
+ * is created, API key is persisted to disk, navigation works.
  */
 test('Setup flow creates a project and saves an API key', async ({ page }) => {
   await page.goto('/setup');
@@ -29,7 +28,7 @@ test('Setup flow creates a project and saves an API key', async ({ page }) => {
 });
 
 test('Network failure surfaces a toast', async ({ page }) => {
-  // Force every gateway request to fail.
+  // Force every API request to fail.
   await page.route('**/api/**', (route) => route.abort('failed'));
   await page.goto('/setup');
 

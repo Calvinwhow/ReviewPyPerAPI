@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
 import { ConfigProvider } from './hooks/useConfig';
 import type { AppConfig } from './hooks/useConfig';
 import AppLayout from './components/layout/AppLayout';
 import ErrorBoundary from './components/ErrorBoundary';
+import SkipLink from './components/ui/SkipLink';
 import { ToastProvider, useToast } from './components/ui/Toast';
 import { getErrorMessage } from './services/errorMessage';
 import SetupReview from './pages/SetupReview';
@@ -16,7 +17,9 @@ import InclusionEvaluation from './pages/InclusionEvaluation';
 import DataExtraction from './pages/DataExtraction';
 
 function AppRoutes() {
-  const projectId = localStorage.getItem('reviewpyper_project_id') ?? undefined;
+  const [projectId] = useState(
+    () => localStorage.getItem('reviewpyper_project_id') ?? undefined,
+  );
   return (
     <Routes>
       <Route element={<AppLayout projectId={projectId} />}>
@@ -66,6 +69,7 @@ export default function App({ config }: AppProps) {
         <ToastProvider>
           <QueryProviderWithToasts>
             <BrowserRouter>
+              <SkipLink />
               <AppRoutes />
             </BrowserRouter>
           </QueryProviderWithToasts>

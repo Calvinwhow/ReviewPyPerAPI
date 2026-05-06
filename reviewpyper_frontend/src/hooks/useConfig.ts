@@ -22,7 +22,8 @@ export function resolveEndpoint(config: AppConfig, name: string, params?: Record
       url = url.replace(`{${key}}`, encodeURIComponent(value));
     }
   }
-  if (config.testMode && url.includes('/pipeline/')) {
+  const isFilesOrHealth = url.includes('/files/') || url.endsWith('/health');
+  if (config.testMode && !isFilesOrHealth) {
     url += (url.includes('?') ? '&' : '?') + 'test=true';
   }
   return url;

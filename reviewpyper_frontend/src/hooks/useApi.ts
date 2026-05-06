@@ -33,7 +33,19 @@ export function useDeleteServerProject() {
 
 export function useUploadFile() {
   const config = useConfig();
-  return useMutation({ mutationFn: ({ projectId, file, subfolder }: { projectId: string; file: File; subfolder?: string }) => filesApi.upload(config, projectId, file, subfolder) });
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      file,
+      subfolder,
+      onProgress,
+    }: {
+      projectId: string;
+      file: File;
+      subfolder?: string;
+      onProgress?: (fraction: number) => void;
+    }) => filesApi.upload(config, projectId, file, subfolder, onProgress),
+  });
 }
 
 export function useProjectFiles(projectId: string | undefined, subfolder = '') {

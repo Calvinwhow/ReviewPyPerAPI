@@ -2,17 +2,12 @@
 import { defineConfig } from '@playwright/test';
 
 /**
- * Boots both the gateway (in synthetic test mode) and the Vite dev server.
- * The frontend talks to /api/* which Vite proxies to localhost:8001 (the gateway).
- *
- * Requirements:
- *   - Python deps from cli/gateway/requirements.txt installed
- *   - Node deps from package.json installed
+ * E2E config. When run inside docker compose the API and Vite dev server
+ * are already running as sibling services (PLAYWRIGHT_BASE_URL is set).
+ * For local runs, both are booted automatically via webServer.
  *
  * Run with: npm run e2e
  */
-// When PLAYWRIGHT_BASE_URL is set (e.g. inside docker compose), the gateway
-// and frontend are already running as sibling services — skip webServer.
 const externalBase = process.env.PLAYWRIGHT_BASE_URL;
 
 // real.spec.ts hits the actual reviewpyper_api with a real OpenAI key.
@@ -30,13 +25,6 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: externalBase ? undefined : [
-    {
-      command:
-        'cd ../cli/gateway && DATA_DIR=./e2e-data uvicorn main:app --port 8001 --host 127.0.0.1',
-      url: 'http://127.0.0.1:8001/health',
-      reuseExistingServer: !process.env.CI,
-      timeout: 30_000,
-    },
     {
       command: 'npm run dev -- --host 127.0.0.1',
       url: 'http://127.0.0.1:5173',

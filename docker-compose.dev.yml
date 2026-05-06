@@ -1,0 +1,39 @@
+# Local development stack — opens the website in your browser.
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up --build
+#
+# Then open http://localhost:3000 in your browser.
+# You'll enter your OpenAI API key in the web UI during project setup.
+
+services:
+  reviewpyper-api:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: reviewpyper_api/containers/Dockerfile.prod
+    environment:
+      DATA_DIR: /data
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in your shell before running}
+    volumes:
+      - app-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  frontend:
+    build:
+      context: ./reviewpyper_frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    volumes:
+      - ./reviewpyper_frontend/public/config.real.json:/usr/share/nginx/html/config.json:ro
+    depends_on:
+      reviewpyper-api:
+        condition: service_healthy
+
+volumes:
+  app-data:

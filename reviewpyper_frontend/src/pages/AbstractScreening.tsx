@@ -1,20 +1,22 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileCheck, Play, ArrowRight, CheckCircle, Upload } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardBody, CardFooter } from '../components/ui/Card';
+import { Card, CardHeader, CardTitle, CardBody, CardFooter } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import FileUpload from '../components/ui/FileUpload';
 import Alert from '../components/ui/Alert';
-import Spinner from '../components/ui/Spinner';
+import ProgressBar from '../components/ui/ProgressBar';
 import { useUploadFile, useScreenAbstracts } from '../hooks/useApi';
 import { useProjectState } from '../hooks/useProjectState';
 import { useConfig } from '../hooks/useConfig';
 
+const MAX_UPLOAD_MB = 500;
+
 export default function AbstractScreening() {
   const navigate = useNavigate();
   const { settings } = useConfig();
-  const projectId = localStorage.getItem('reviewpyper_project_id') ?? '';
+  const [projectId] = useState(() => localStorage.getItem('reviewpyper_project_id') ?? '');
   const { getProject, getPipelineState, updatePipelineState } = useProjectState();
   const project = getProject(projectId);
   const pipeline = getPipelineState(projectId);
@@ -22,14 +24,27 @@ export default function AbstractScreening() {
   const [columnName, setColumnName] = useState('OpenAI_Screen');
   const [abstractsTxtPath, setAbstractsTxtPath] = useState(pipeline.abstracts_txt_path ?? '');
   const [isScreening, setIsScreening] = useState(false);
+  const [uploadFraction, setUploadFraction] = useState<number | undefined>(undefined);
+  const [uploadedFile, setUploadedFile] = useState<{ name: string; size: number } | null>(null);
   const uploadFile = useUploadFile();
   const screenAbstracts = useScreenAbstracts();
 
   const handleUploadAbstracts = useCallback(async (files: File[]) => {
     if (!files.length || !projectId) return;
-    const result = await uploadFile.mutateAsync({ projectId, file: files[0] });
-    setAbstractsTxtPath(result.path);
-    updatePipelineState(projectId, { abstracts_txt_path: result.path });
+    const file = files[0];
+    setUploadFraction(0);
+    setUploadedFile({ name: file.name, size: file.size });
+    try {
+      const result = await uploadFile.mutateAsync({
+        projectId,
+        file,
+        onProgress: (f) => setUploadFraction(f),
+      });
+      setAbstractsTxtPath(result.path);
+      updatePipelineState(projectId, { abstracts_txt_path: result.path });
+    } finally {
+      setUploadFraction(undefined);
+    }
   }, [projectId, uploadFile, updatePipelineState]);
 
   const handleScreen = async () => {
@@ -42,15 +57,52 @@ export default function AbstractScreening() {
   };
 
   return (
-    <div className="space-y-6">
-      <div><h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3"><FileCheck className="h-7 w-7 text-primary-600" />Abstract Screening</h1><p className="text-gray-500 mt-1">Screen abstracts using AI. Requires title screening output.</p></div>
+    <div className="space-y-8">
+      <header>
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--color-muted-foreground)]">
+          Step 03
+        </p>
+        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-[var(--color-foreground)] flex items-center gap-3">
+          <FileCheck className="h-7 w-7 text-[var(--color-primary)]" aria-hidden="true" />
+          Abstract Screening
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm text-[var(--color-muted-foreground)]">
+          Upload abstracts and screen them against the inclusion criteria established in title screening.
+        </p>
+      </header>
       {!pipeline.title_output_csv_path && <Alert variant="warning">Complete Title Screening first.</Alert>}
       <Card>
         <CardHeader><CardTitle><span className="flex items-center gap-2"><Upload className="h-5 w-5 text-primary-600" />Upload Abstracts File</span></CardTitle></CardHeader>
         <CardBody>
-          <FileUpload accept=".txt,.csv" onFiles={handleUploadAbstracts} label="Drop abstracts file here" hint="TXT or CSV" />
-          {uploadFile.isPending && <Spinner label="Uploading..." className="mt-4" />}
-          {abstractsTxtPath && !uploadFile.isPending && <Alert variant="success" className="mt-4">File: <code className="text-xs">{abstractsTxtPath.split('/').pop()}</code></Alert>}
+          <FileUpload
+            accept=".txt,.csv"
+            onFiles={handleUploadAbstracts}
+            label="Drop abstracts file here or click to browse"
+            hint="TXT or CSV"
+            maxSizeMB={MAX_UPLOAD_MB}
+            disabled={uploadFile.isPending}
+          />
+          {uploadFile.isPending && uploadedFile && (
+            <div className="mt-4" role="status" aria-live="polite">
+              <ProgressBar
+                value={uploadFraction}
+                label={`Uploading ${uploadedFile.name} · ${
+                  uploadFraction !== undefined ? `${Math.round(uploadFraction * 100)}%` : 'preparing…'
+                }`}
+              />
+            </div>
+          )}
+          {abstractsTxtPath && !uploadFile.isPending && uploadedFile && (
+            <Alert variant="success" className="mt-4">
+              Uploaded <code className="text-xs font-mono">{uploadedFile.name}</code>{' '}
+              <span className="text-gray-500">({(uploadedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+            </Alert>
+          )}
+          {uploadFile.isError && (
+            <Alert variant="error" className="mt-4" title="Upload failed">
+              {(uploadFile.error as Error)?.message ?? 'Unknown error'}
+            </Alert>
+          )}
         </CardBody>
       </Card>
       {pipeline.title_output_csv_path && abstractsTxtPath && (

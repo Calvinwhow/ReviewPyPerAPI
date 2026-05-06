@@ -1,7 +1,6 @@
 # Run all test suites in containers — no local node/python required.
 #
 #   docker compose -f docker-compose.test.yml run --rm frontend-unit
-#   docker compose -f docker-compose.test.yml run --rm gateway-tests
 #   docker compose -f docker-compose.test.yml run --rm e2e
 #
 # Or run everything:
@@ -17,27 +16,21 @@ services:
       target: test
     command: npm test
 
-  # ---- Gateway pytest suite ----
-  gateway-tests:
+  # ---- E2E stack: API + frontend dev server + Playwright ----
+  reviewpyper-api-e2e:
+    platform: linux/amd64
     build:
-      context: ./reviewpyper_gateway
-      dockerfile: Dockerfile.test
-    command: pytest -q
-
-  # ---- E2E stack: gateway + frontend dev server + Playwright ----
-  gateway-e2e:
-    build:
-      context: ./reviewpyper_gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: reviewpyper_api/containers/Dockerfile.prod
     environment:
       DATA_DIR: /data
     volumes:
-      - gateway-e2e-data:/data
+      - api-e2e-data:/data
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
-      interval: 2s
-      timeout: 2s
-      retries: 15
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
 
   frontend-e2e:
     build:
@@ -45,10 +38,9 @@ services:
       dockerfile: Dockerfile.test
       target: dev
     environment:
-      # Vite dev proxy points /api → http://gateway-e2e:8001
-      VITE_API_PROXY: http://gateway-e2e:8001
+      VITE_API_PROXY: http://reviewpyper-api-e2e:8000
     depends_on:
-      gateway-e2e:
+      reviewpyper-api-e2e:
         condition: service_healthy
 
   e2e:
@@ -61,8 +53,8 @@ services:
       CI: "true"
     depends_on:
       - frontend-e2e
-      - gateway-e2e
+      - reviewpyper-api-e2e
     command: npx playwright test --reporter=list
 
 volumes:
-  gateway-e2e-data:
+  api-e2e-data:

@@ -6,7 +6,7 @@ import type { Project, PipelineState } from '../types';
 /**
  * Server-backed project state.
  *
- * Source of truth lives in the project folder on the gateway as state.json.
+ * Source of truth lives in the project folder on the API server as state.json.
  * The frontend's old `useProjectState` hook is kept for backwards compat —
  * pages can migrate to this hook one at a time.
  *
@@ -25,7 +25,7 @@ export function useServerProjectState(projectId: string | undefined) {
   });
 
   const putState = useMutation({
-    mutationFn: (state: Project) => filesApi.putProjectState(config, projectId!, state as unknown as Record<string, unknown>) as Promise<Project>,
+    mutationFn: (state: Project) => filesApi.putProjectState(config, projectId!, state as unknown as Record<string, unknown>) as unknown as Promise<Project>,
     onMutate: async (next) => {
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<Project>(key);

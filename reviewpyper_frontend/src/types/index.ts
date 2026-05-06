@@ -35,7 +35,7 @@ export interface PipelineState {
   extraction_automated_csv_path?: string;
 }
 
-export interface ProjectInfo { project_id: string; path: string; }
+export interface ProjectInfo { project_id: string; path: string; api_key_path?: string; }
 export interface FileInfo { name: string; path: string; size: number; is_dir: boolean; }
 export interface UploadResponse { filename: string; path: string; }
 
